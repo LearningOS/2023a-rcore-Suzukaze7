@@ -83,13 +83,13 @@ impl TaskManager {
         let mut inner = self.inner.exclusive_access();
         let task0 = &mut inner.tasks[0];
         task0.task_status = TaskStatus::Running;
+
+        task0.task_st_time = get_time_ms();
+
         let next_task_cx_ptr = &task0.task_cx as *const TaskContext;
         drop(inner);
         let mut _unused = TaskContext::zero_init();
         // before this, we should drop local variables that must be dropped manually
-
-        self.set_current_st_time_or();
-
         unsafe {
             __switch(&mut _unused as *mut TaskContext, next_task_cx_ptr);
         }
@@ -129,6 +129,11 @@ impl TaskManager {
             let current = inner.current_task;
             inner.tasks[next].task_status = TaskStatus::Running;
             inner.current_task = next;
+
+            if inner.tasks[next].task_st_time == usize::MAX {
+                inner.tasks[next].task_st_time = get_time_ms();
+            }
+
             let current_task_cx_ptr = &mut inner.tasks[current].task_cx as *mut TaskContext;
             let next_task_cx_ptr = &inner.tasks[next].task_cx as *const TaskContext;
             drop(inner);
@@ -140,11 +145,9 @@ impl TaskManager {
         } else {
             panic!("All applications completed!");
         }
-
-        self.set_current_st_time_or();
     }
 
-    fn get_current_task_info(&self) -> ([u32; MAX_SYSCALL_NUM], usize) {
+    fn get_task_info(&self) -> ([u32; MAX_SYSCALL_NUM], usize) {
         let inner = self.inner.exclusive_access();
         let current = inner.current_task;
         let task = &inner.tasks[current];
@@ -154,17 +157,7 @@ impl TaskManager {
         )
     }
 
-    fn set_current_st_time_or(&self) {
-        let mut inner = self.inner.exclusive_access();
-        let current = inner.current_task;
-        let task = &mut inner.tasks[current];
-
-        if task.task_st_time == usize::MAX {
-            task.task_st_time = get_time_ms();
-        }
-    }
-
-    fn increase_current_syscall_times(&self, syscall_id: usize) {
+    fn increase_syscall_times(&self, syscall_id: usize) {
         let mut inner = self.inner.exclusive_access();
         let current = inner.current_task;
         let task = &mut inner.tasks[current];
@@ -172,6 +165,8 @@ impl TaskManager {
         task.task_syscall_times[syscall_id] += 1;
     }
 }
+
+// 以下函数封装是为了解耦
 
 /// Run the first task in task list.
 pub fn run_first_task() {
@@ -207,11 +202,11 @@ pub fn exit_current_and_run_next() {
 }
 
 /// Get current task info
-pub fn get_current_task_info() -> ([u32; MAX_SYSCALL_NUM], usize) {
-    TASK_MANAGER.get_current_task_info()
+pub fn get_task_info() -> ([u32; MAX_SYSCALL_NUM], usize) {
+    TASK_MANAGER.get_task_info()
 }
 
 /// Increase current syscall times
-pub fn increase_current_syscall_times(syscall_id: usize) {
-    TASK_MANAGER.increase_current_syscall_times(syscall_id);
+pub fn increase_syscall_times(syscall_id: usize) {
+    TASK_MANAGER.increase_syscall_times(syscall_id);
 }
