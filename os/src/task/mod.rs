@@ -14,8 +14,11 @@ mod switch;
 #[allow(clippy::module_inception)]
 mod task;
 
+use crate::config::MAX_SYSCALL_NUM;
 use crate::loader::{get_app_data, get_num_app};
+use crate::mm::{PhysAddr, VirtAddr};
 use crate::sync::UPSafeCell;
+use crate::timer::get_time_us;
 use crate::trap::TrapContext;
 use alloc::vec::Vec;
 use lazy_static::*;
@@ -79,6 +82,9 @@ impl TaskManager {
         let mut inner = self.inner.exclusive_access();
         let next_task = &mut inner.tasks[0];
         next_task.task_status = TaskStatus::Running;
+
+        next_task.task_st_time = get_user_time();
+
         let next_task_cx_ptr = &next_task.task_cx as *const TaskContext;
         drop(inner);
         let mut _unused = TaskContext::zero_init();
@@ -141,6 +147,11 @@ impl TaskManager {
             let current = inner.current_task;
             inner.tasks[next].task_status = TaskStatus::Running;
             inner.current_task = next;
+
+            if inner.tasks[next].task_st_time == usize::MAX {
+                inner.tasks[next].task_st_time = get_user_time();
+            }
+
             let current_task_cx_ptr = &mut inner.tasks[current].task_cx as *mut TaskContext;
             let next_task_cx_ptr = &inner.tasks[next].task_cx as *const TaskContext;
             drop(inner);
@@ -152,6 +163,46 @@ impl TaskManager {
         } else {
             panic!("All applications completed!");
         }
+    }
+
+    fn translate_current_task_addr(&self, va: VirtAddr) -> Option<PhysAddr> {
+        let inner = self.inner.exclusive_access();
+        let current = inner.current_task;
+        inner.tasks[current].memory_set.translate_addr(va)
+    }
+
+    fn get_task_info(&self) -> ([u32; MAX_SYSCALL_NUM], usize) {
+        let inner = self.inner.exclusive_access();
+        let current = inner.current_task;
+        let task = &inner.tasks[current];
+        (
+            task.task_syscall_times.clone(),
+            get_user_time() - task.task_st_time,
+        )
+    }
+
+    fn increase_syscall_times(&self, syscall_id: usize) {
+        let mut inner = self.inner.exclusive_access();
+        let current = inner.current_task;
+        let task = &mut inner.tasks[current];
+
+        task.task_syscall_times[syscall_id] += 1;
+    }
+
+    fn current_task_map(&self, start: usize, len: usize, port: usize) -> isize {
+        let mut inner = self.inner.exclusive_access();
+        let current = inner.current_task;
+        let task = &mut inner.tasks[current];
+
+        task.memory_set.map_range(start, len, port)
+    }
+
+    fn current_task_unmap(&self, start: usize, len: usize) -> isize {
+        let mut inner = self.inner.exclusive_access();
+        let current = inner.current_task;
+        let task = &mut inner.tasks[current];
+
+        task.memory_set.unmap_range(start, len)
     }
 }
 
@@ -174,6 +225,15 @@ fn mark_current_suspended() {
 /// Change the status of current `Running` task into `Exited`.
 fn mark_current_exited() {
     TASK_MANAGER.mark_current_exited();
+}
+
+/// User get_time copy
+fn get_user_time() -> usize {
+    let us = get_time_us();
+    let sec = us / 1_000_000;
+    let usec = us % 1_000_000;
+
+    (sec & 0xffff) * 1000 + usec / 1000
 }
 
 /// Suspend the current 'Running' task and run the next task in task list.
@@ -201,4 +261,29 @@ pub fn current_trap_cx() -> &'static mut TrapContext {
 /// Change the current 'Running' task's program break
 pub fn change_program_brk(size: i32) -> Option<usize> {
     TASK_MANAGER.change_current_program_brk(size)
+}
+
+/// tratranslate current task virt_addr to phys_addr
+pub fn translate_current_task_addr(va: VirtAddr) -> Option<PhysAddr> {
+    TASK_MANAGER.translate_current_task_addr(va)
+}
+
+/// Get current task info
+pub fn get_task_info() -> ([u32; MAX_SYSCALL_NUM], usize) {
+    TASK_MANAGER.get_task_info()
+}
+
+/// Increase current syscall times
+pub fn increase_syscall_times(syscall_id: usize) {
+    TASK_MANAGER.increase_syscall_times(syscall_id);
+}
+
+/// Map current task heap
+pub fn current_task_map(start: usize, len: usize, port: usize) -> isize {
+    TASK_MANAGER.current_task_map(start, len, port)
+}
+
+/// Unmap current task heap
+pub fn current_task_unmap(start: usize, len: usize) -> isize {
+    TASK_MANAGER.current_task_unmap(start, len)
 }
