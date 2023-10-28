@@ -22,7 +22,12 @@ mod switch;
 #[allow(rustdoc::private_intra_doc_links)]
 mod task;
 
-use crate::fs::{open_file, OpenFlags};
+use crate::{
+    config::MAX_SYSCALL_NUM,
+    fs::{open_file, OpenFlags},
+    mm::{PhysAddr, VirtAddr},
+    timer::get_time_us,
+};
 use alloc::sync::Arc;
 pub use context::TaskContext;
 use lazy_static::*;
@@ -119,4 +124,61 @@ lazy_static! {
 ///Add init process to the manager
 pub fn add_initproc() {
     add_task(INITPROC.clone());
+}
+
+/// User get_time copy
+fn get_user_time() -> usize {
+    let us = get_time_us();
+    let sec = us / 1_000_000;
+    let usec = us % 1_000_000;
+
+    (sec & 0xffff) * 1000 + usec / 1000
+}
+
+/// tratranslate current task virt_addr to phys_addr
+pub fn translate_current_task_addr(va: VirtAddr) -> Option<PhysAddr> {
+    current_task()
+        .unwrap()
+        .inner_exclusive_access()
+        .memory_set
+        .translate_addr(va)
+}
+
+/// Get current task info
+pub fn get_task_info() -> ([u32; MAX_SYSCALL_NUM], usize) {
+    let task = current_task().unwrap();
+    let inner = task.inner_exclusive_access();
+    (
+        inner.task_syscall_times.clone(),
+        get_user_time() - inner.task_st_time,
+    )
+}
+
+/// Increase current syscall times
+pub fn increase_syscall_times(syscall_id: usize) {
+    let task = current_task().unwrap();
+    task.inner_exclusive_access().task_syscall_times[syscall_id] += 1;
+}
+
+/// Map current task heap
+pub fn current_task_map(start: usize, len: usize, port: usize) -> isize {
+    current_task()
+        .unwrap()
+        .inner_exclusive_access()
+        .memory_set
+        .map_range(start, len, port)
+}
+
+/// Unmap current task heap
+pub fn current_task_unmap(start: usize, len: usize) -> isize {
+    current_task()
+        .unwrap()
+        .inner_exclusive_access()
+        .memory_set
+        .unmap_range(start, len)
+}
+
+/// Set current task priority
+pub fn set_current_priority(prio: usize) {
+    current_task().unwrap().inner_exclusive_access().priority = prio;
 }
