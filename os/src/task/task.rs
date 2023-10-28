@@ -1,7 +1,7 @@
 //! Types related to task management & Functions for completely changing TCB
 use super::TaskContext;
 use super::{kstack_alloc, pid_alloc, KernelStack, PidHandle};
-use crate::config::TRAP_CONTEXT_BASE;
+use crate::config::{MAX_SYSCALL_NUM, TRAP_CONTEXT_BASE};
 use crate::mm::{MemorySet, PhysPageNum, VirtAddr, KERNEL_SPACE};
 use crate::sync::UPSafeCell;
 use crate::trap::{trap_handler, TrapContext};
@@ -68,6 +68,18 @@ pub struct TaskControlBlockInner {
 
     /// Program break
     pub program_brk: usize,
+
+    /// The task syscall times
+    pub task_syscall_times: [u32; MAX_SYSCALL_NUM],
+
+    /// The task start time
+    pub task_st_time: usize,
+
+    /// The task stride
+    pub stride: usize,
+
+    /// The task priority
+    pub priority: usize,
 }
 
 impl TaskControlBlockInner {
@@ -84,6 +96,10 @@ impl TaskControlBlockInner {
     }
     pub fn is_zombie(&self) -> bool {
         self.get_status() == TaskStatus::Zombie
+    }
+
+    pub fn is_ready(&self) -> bool {
+        self.get_status() == TaskStatus::Ready
     }
 }
 
@@ -118,6 +134,10 @@ impl TaskControlBlock {
                     exit_code: 0,
                     heap_bottom: user_sp,
                     program_brk: user_sp,
+                    task_syscall_times: [0; MAX_SYSCALL_NUM],
+                    task_st_time: usize::MAX,
+                    stride: 0,
+                    priority: 16,
                 })
             },
         };
@@ -191,6 +211,10 @@ impl TaskControlBlock {
                     exit_code: 0,
                     heap_bottom: parent_inner.heap_bottom,
                     program_brk: parent_inner.program_brk,
+                    task_syscall_times: parent_inner.task_syscall_times.clone(),
+                    task_st_time: parent_inner.task_st_time,
+                    stride: parent_inner.stride,
+                    priority: parent_inner.priority,
                 })
             },
         });

@@ -158,6 +158,15 @@ impl PageTable {
     pub fn token(&self) -> usize {
         8usize << 60 | self.root_ppn.0
     }
+
+    pub fn translate_addr(&self, va: VirtAddr) -> Option<PhysAddr> {
+        let vpn = va.floor();
+        if let Some(pte) = self.translate(vpn) {
+            Some(PhysAddr(PhysAddr::from(pte.ppn()).0 + va.page_offset()))
+        } else {
+            None
+        }
+    }
 }
 
 /// Translate&Copy a ptr[u8] array with LENGTH len to a mutable u8 Vec through page table
