@@ -197,9 +197,10 @@ pub fn sys_spawn(path: *const u8) -> isize {
 
     let token = current_user_token();
     let path = translated_str(token, path);
-    if let Some(data) = get_app_data_by_name(path.as_str()) {
+    if let Some(app_inode) = open_file(path.as_str(), OpenFlags::RDONLY) {
+        let all_data = app_inode.read_all();
         // reuse TaskControlBlock::new()
-        let task = Arc::new(TaskControlBlock::new(data));
+        let task = Arc::new(TaskControlBlock::new(all_data.as_slice()));
 
         // add parent and child
         let parent = current_task().unwrap();
