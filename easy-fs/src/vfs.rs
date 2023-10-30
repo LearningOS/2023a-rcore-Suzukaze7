@@ -183,4 +183,34 @@ impl Inode {
         });
         block_cache_sync_all();
     }
+
+    /// Create link under current inode by name
+    pub fn link(&self, old_name: &str, new_name: &str) -> isize {
+        let mut fs = self.fs.lock();
+
+        // get old inode id
+        let old_inode_id = if let Some(id) =
+            self.read_disk_inode(|disk_inode| self.find_inode_id(old_name, disk_inode))
+        {
+            id
+        } else {
+            return -1;
+        };
+
+        self.modify_disk_inode(|root_inode| {
+            // append file in the dirent
+            let file_count = (root_inode.size as usize) / DIRENT_SZ;
+            let new_size = (file_count + 1) * DIRENT_SZ;
+            // increase size
+            self.increase_size(new_size as u32, root_inode, &mut fs);
+            // write dirent
+            let dirent = DirEntry::new(new_name, old_inode_id);
+            root_inode.write_at(
+                file_count * DIRENT_SZ,
+                dirent.as_bytes(),
+                &self.block_device,
+            );
+        });
+        0
+    }
 }

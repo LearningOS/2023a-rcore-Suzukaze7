@@ -98,6 +98,9 @@ impl TaskControlBlockInner {
     pub fn is_zombie(&self) -> bool {
         self.get_status() == TaskStatus::Zombie
     }
+    pub fn is_ready(&self) -> bool {
+        self.get_status() == TaskStatus::Ready
+    }
     pub fn alloc_fd(&mut self) -> usize {
         if let Some(fd) = (0..self.fd_table.len()).find(|fd| self.fd_table[*fd].is_none()) {
             fd
@@ -106,9 +109,12 @@ impl TaskControlBlockInner {
             self.fd_table.len() - 1
         }
     }
-
-    pub fn is_ready(&self) -> bool {
-        self.get_status() == TaskStatus::Ready
+    pub fn get_fd(&self, fd: usize) -> Option<Arc<dyn File + Send + Sync>> {
+        if fd >= self.fd_table.len() {
+            None
+        } else {
+            self.fd_table[fd].clone()
+        }
     }
 }
 

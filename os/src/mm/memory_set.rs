@@ -320,7 +320,7 @@ impl MemorySet {
     }
 
     /// Translate a virtual address to a physical address
-    pub fn translate_addr(&self, vp: VirtAddr) -> Option<PhysAddr> {
+    pub fn translate_va(&self, vp: VirtAddr) -> Option<PhysAddr> {
         self.page_table.translate_va(vp)
     }
 

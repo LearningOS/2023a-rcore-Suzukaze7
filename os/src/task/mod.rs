@@ -136,12 +136,12 @@ fn get_user_time() -> usize {
 }
 
 /// tratranslate current task virt_addr to phys_addr
-pub fn translate_current_task_addr(va: VirtAddr) -> Option<PhysAddr> {
+pub fn translate_current_va(va: VirtAddr) -> Option<PhysAddr> {
     current_task()
         .unwrap()
         .inner_exclusive_access()
         .memory_set
-        .translate_addr(va)
+        .translate_va(va)
 }
 
 /// Get current task info

@@ -9,7 +9,7 @@ use crate::{
     task::{
         add_task, current_task, current_task_map, current_task_unmap, current_user_token,
         exit_current_and_run_next, get_task_info, set_current_priority,
-        suspend_current_and_run_next, translate_current_task_addr, TaskControlBlock, TaskStatus,
+        suspend_current_and_run_next, translate_current_va, TaskControlBlock, TaskStatus,
     },
     timer::get_time_us,
 };
@@ -126,7 +126,7 @@ pub fn sys_get_time(ts: *mut TimeVal, _tz: usize) -> isize {
     let ts = ts as usize;
 
     unsafe {
-        *(translate_current_task_addr(VirtAddr::from(ts)).unwrap().0 as *mut TimeVal) = TimeVal {
+        *(translate_current_va(VirtAddr::from(ts)).unwrap().0 as *mut TimeVal) = TimeVal {
             sec: us / 1_000_000,
             usec: us % 1_000_000,
         };
@@ -145,13 +145,12 @@ pub fn sys_task_info(ti: *mut TaskInfo) -> isize {
 
     let info = get_task_info();
     unsafe {
-        *(translate_current_task_addr(VirtAddr::from(ti as usize))
-            .unwrap()
-            .0 as *mut TaskInfo) = TaskInfo {
-            status: TaskStatus::Running,
-            syscall_times: info.0,
-            time: info.1,
-        };
+        *(translate_current_va(VirtAddr::from(ti as usize)).unwrap().0 as *mut TaskInfo) =
+            TaskInfo {
+                status: TaskStatus::Running,
+                syscall_times: info.0,
+                time: info.1,
+            };
     }
     0
 }
