@@ -72,8 +72,11 @@ pub struct TaskControlBlockInner {
     /// Program break
     pub program_brk: usize,
 
+    /// 通过群友得知，将 u32 改为 usize 后，在 ch5_spawn0 时
+    /// 可以防止 sys_spawn() -> TaskControlBlock::new() -> MemorySet::from_elf()
+    /// 中的 max_end_vpn 为零，导致 remap
     /// The task syscall times
-    pub task_syscall_times: [u32; MAX_SYSCALL_NUM],
+    pub task_syscall_times: [usize; MAX_SYSCALL_NUM],
 
     /// The task start time
     pub task_st_time: usize,

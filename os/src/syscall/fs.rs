@@ -1,5 +1,5 @@
 //! File and filesystem-related syscalls
-use crate::fs::{linkat, open_file, OpenFlags, Stat};
+use crate::fs::{linkat, open_file, unlinkat, OpenFlags, Stat};
 use crate::mm::{translated_byte_buffer, translated_str, UserBuffer, VirtAddr};
 use crate::task::{current_task, current_user_token, translate_current_va};
 
@@ -81,9 +81,15 @@ pub fn sys_fstat(fd: usize, st: *mut Stat) -> isize {
         current_task().unwrap().pid.0
     );
 
-    let _st = translate_current_va(VirtAddr::from(st as usize)).unwrap().0 as *mut Stat;
-
-    if let Some(_fd) = current_task().unwrap().inner_exclusive_access().get_fd(fd) {}
+    let st = translate_current_va(VirtAddr::from(st as usize)).unwrap().0 as *mut Stat;
+    if let Some(fd) = current_task().unwrap().inner_exclusive_access().get_fd(fd) {
+        if let Some(stat) = fd.stat() {
+            unsafe {
+                *st = stat;
+            }
+            return 0;
+        }
+    }
 
     -1
 }
@@ -103,10 +109,12 @@ pub fn sys_linkat(old_name: *const u8, new_name: *const u8) -> isize {
 }
 
 /// YOUR JOB: Implement unlinkat.
-pub fn sys_unlinkat(_name: *const u8) -> isize {
+pub fn sys_unlinkat(name: *const u8) -> isize {
     trace!(
         "kernel:pid[{}] sys_unlinkat NOT IMPLEMENTED",
         current_task().unwrap().pid.0
     );
-    -1
+
+    let name = translated_str(current_user_token(), name);
+    unlinkat(&name)
 }

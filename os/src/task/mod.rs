@@ -147,11 +147,13 @@ pub fn translate_current_va(va: VirtAddr) -> Option<PhysAddr> {
 /// Get current task info
 pub fn get_task_info() -> ([u32; MAX_SYSCALL_NUM], usize) {
     let task = current_task().unwrap();
+
     let inner = task.inner_exclusive_access();
-    (
-        inner.task_syscall_times.clone(),
-        get_user_time() - inner.task_st_time,
-    )
+    let mut syscall_time = [0u32; MAX_SYSCALL_NUM];
+    for (i, a) in inner.task_syscall_times.into_iter().enumerate() {
+        syscall_time[i] = a as u32;
+    }
+    (syscall_time, get_user_time() - inner.task_st_time)
 }
 
 /// Increase current syscall times
